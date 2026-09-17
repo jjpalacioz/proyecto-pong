@@ -41,7 +41,21 @@ Este proyecto implementa el clásico juego **Pong** en una arquitectura
 *(Pendiente — se documenta en la Fase 1)*
 
 ### 2.2 Diseño del protocolo binario (`MyAppGameProtocol`)
-*(Ver [`docs/PROTOCOL.md`](docs/PROTOCOL.md))*
+
+El protocolo de aplicación propio, **codificado en binario**, está completamente
+especificado en [`docs/PROTOCOL.md`](docs/PROTOCOL.md). Incluye:
+
+- **Header de tamaño fijo (6 bytes)** con `MAGIC`, `VERSION`, `TYPE` y `LENGTH`,
+  que resuelve el *framing* sobre el flujo de bytes de TCP.
+- **Vocabulario de 13 tipos de mensaje** (registro, emparejamiento, input, estado,
+  eventos de juego, ping/pong y errores).
+- **Formato byte a byte del payload** de cada mensaje.
+- **Máquina de estados** del cliente (reglas de procedimiento).
+- **Tabla de códigos de error** para casos anómalos.
+
+Los valores numéricos (constantes) están centralizados en
+[`common/protocol_spec.md`](common/protocol_spec.md) como fuente única de verdad
+para el servidor (C) y el cliente (Python).
 
 ### 2.3 Servidor (C)
 *(Pendiente)*
