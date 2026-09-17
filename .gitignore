@@ -1,0 +1,34 @@
+# ============================================================
+#  .gitignore - Archivos que Git NO debe rastrear ni subir
+# ============================================================
+# La idea: solo subimos CÓDIGO FUENTE, no cosas generadas.
+# Todo lo que se puede regenerar compilando o ejecutando, se ignora.
+
+# --- Binarios y objetos compilados de C (los genera gcc/make) ---
+*.o
+*.obj
+*.exe
+*.out
+server/server
+server/bin/
+build/
+
+# --- Archivos de log generados en tiempo de ejecución ---
+# El profe pide un <LogFile>; ese archivo se genera al correr, no se sube.
+*.log
+logs/
+
+# --- Python (cliente) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- Sistema operativo / editores ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
