@@ -58,7 +58,37 @@ Los valores numéricos (constantes) están centralizados en
 para el servidor (C) y el cliente (Python).
 
 ### 2.3 Servidor (C)
-*(Pendiente)*
+
+El servidor está escrito en C usando la **API de Sockets Berkeley** directamente
+(sin librerías de sockets de alto nivel). Estructura:
+
+```
+server/
+├── include/
+│   ├── protocol.h   # constantes del protocolo (magic, tipos, errores, params)
+│   └── logger.h     # API del sistema de logging
+├── src/
+│   ├── server.c     # programa principal: socket → bind → listen → accept
+│   └── logger.c     # implementación del logger (consola + archivo)
+└── Makefile         # compilación con gcc
+```
+
+**Compilar y ejecutar:**
+```bash
+cd server
+make
+./server <PORT> <LogFile>     # ej: ./server 5000 pong.log
+```
+
+**Flujo del servidor (Fase 2):** valida los argumentos → inicializa el logger →
+crea el socket TCP (`socket`) → lo asocia al puerto (`bind`) → escucha
+(`listen`) → acepta un cliente (`accept`) → intercambia datos (`recv`/`send`) →
+cierra ordenadamente. Cada evento se registra en consola y en el archivo de log.
+
+> El **logger** cumple el requisito del enunciado: imprime por la terminal todas
+> las peticiones/respuestas y las escribe también en el `<LogFile>`, con
+> timestamp y nivel de severidad. Su escritura está protegida con un *mutex*
+> para soportar la concurrencia que se añade en la Fase 4.
 
 ### 2.4 Cliente (Python + Pygame)
 *(Pendiente)*
