@@ -27,7 +27,10 @@ TARGET = server
 SRC_DIR = src
 
 # Lista de todos los archivos fuente. Al agregar un .c nuevo, se anade aqui.
-SOURCES = $(SRC_DIR)/server.c $(SRC_DIR)/logger.c
+SOURCES = $(SRC_DIR)/server.c \
+          $(SRC_DIR)/logger.c \
+          $(SRC_DIR)/net.c \
+          $(SRC_DIR)/protocol_io.c
 
 # Convierte la lista de .c en la lista de .o (archivos objeto).
 # Ej: src/server.c -> src/server.o
