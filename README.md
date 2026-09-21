@@ -108,7 +108,27 @@ y el código adecuado, **sin caerse**.
 *(Pendiente)*
 
 ### 2.5 Concurrencia
-*(Pendiente)*
+
+El servidor usa una arquitectura **thread-per-client** (un hilo por cliente)
+con la librería `pthreads`:
+
+1. El hilo principal ejecuta un **bucle infinito** de `accept()`.
+2. Por cada cliente que llega, crea un **hilo** (`pthread_create`) que lo
+   atiende de forma independiente (`client_thread` en `client_handler.c`).
+3. El hilo se marca como *detached* (`pthread_detach`): libera sus recursos al
+   terminar, así el hilo principal vuelve enseguida a aceptar más clientes.
+
+De este modo, **múltiples parejas de jugadores pueden jugar simultáneamente**,
+cada una atendida por sus propios hilos.
+
+**Seguridad entre hilos (thread-safety):** los datos compartidos se protegen
+con *mutex* para evitar condiciones de carrera:
+- El contador de `player_id` (`assign_player_id`) — dos hilos no pueden asignar
+  el mismo id.
+- La escritura del *logger* — las líneas de log de distintos hilos no se mezclan.
+
+> **Probado:** 5 clientes conectados de forma simultánea reciben 5 IDs únicos,
+> confirmando que el mutex previene la condición de carrera.
 
 ### 2.6 Manejo de errores y casos límite
 *(Pendiente)*
