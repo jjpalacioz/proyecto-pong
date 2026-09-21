@@ -30,7 +30,8 @@ SRC_DIR = src
 SOURCES = $(SRC_DIR)/server.c \
           $(SRC_DIR)/logger.c \
           $(SRC_DIR)/net.c \
-          $(SRC_DIR)/protocol_io.c
+          $(SRC_DIR)/protocol_io.c \
+          $(SRC_DIR)/client_handler.c
 
 # Convierte la lista de .c en la lista de .o (archivos objeto).
 # Ej: src/server.c -> src/server.o
