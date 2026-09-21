@@ -80,10 +80,24 @@ make
 ./server <PORT> <LogFile>     # ej: ./server 5000 pong.log
 ```
 
-**Flujo del servidor (Fase 2):** valida los argumentos → inicializa el logger →
+**Flujo del servidor:** valida los argumentos → inicializa el logger →
 crea el socket TCP (`socket`) → lo asocia al puerto (`bind`) → escucha
-(`listen`) → acepta un cliente (`accept`) → intercambia datos (`recv`/`send`) →
-cierra ordenadamente. Cada evento se registra en consola y en el archivo de log.
+(`listen`) → acepta un cliente (`accept`) → **procesa el registro del cliente
+según el protocolo** → cierra ordenadamente. Cada evento se registra en consola
+y en el archivo de log.
+
+**Módulos del servidor:**
+- `net.c/.h` — `recv_all`/`send_all`: leen/escriben exactamente N bytes sobre
+  TCP (resuelven las lecturas/escrituras parciales del stream).
+- `protocol_io.c/.h` — `recv_message`/`send_message`: implementan el *framing*
+  (header de 6 bytes + payload), validando `MAGIC`, `VERSION` y `LENGTH`.
+- `player.h` — estructura del perfil del jugador (id, nickname, email).
+
+**Registro (Fase 3):** el servidor lee un `MSG_REGISTER`, valida y parsea el
+nickname y el email del payload binario, asigna un `player_id` y responde
+`MSG_REGISTER_OK`. Ante cualquier anomalía (MAGIC/versión/longitud inválidos,
+campos vacíos, tipo inesperado o desconexión abrupta) responde con `MSG_ERROR`
+y el código adecuado, **sin caerse**.
 
 > El **logger** cumple el requisito del enunciado: imprime por la terminal todas
 > las peticiones/respuestas y las escribe también en el `<LogFile>`, con
