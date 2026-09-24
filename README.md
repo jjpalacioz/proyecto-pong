@@ -38,7 +38,11 @@ Este proyecto implementa el clásico juego **Pong** en una arquitectura
 > Esta sección se irá completando fase por fase a medida que avanza el proyecto.
 
 ### 2.1 Arquitectura general
-*(Pendiente — se documenta en la Fase 1)*
+
+Ver [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). En resumen: el servidor en C
+mantiene el estado y simula la física (~60 ticks/seg) y los clientes Python solo
+capturan teclas (`MSG_INPUT`) y dibujan el estado que reciben (`MSG_STATE`,
+que incluye el score en tiempo real). Todo pasa por el servidor.
 
 ### 2.2 Diseño del protocolo binario (`MyAppGameProtocol`)
 

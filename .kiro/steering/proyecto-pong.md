@@ -94,7 +94,9 @@ Protocolos". Fecha límite: **22 de octubre de 2026, 23:59**.
 - Fase 4 — Concurrencia con hilos (thread-per-client, mutex): COMPLETADA.
 - Fase 5 — Cliente Python + GUI Pygame: COMPLETADA (protocol.py, network.py,
   ui.py, main.py; registro funcional contra el servidor C; ventana base).
-- Fase 6 — Lógica del juego + score en tiempo real: PENDIENTE.
+- Fase 6 — Lógica del juego + score en tiempo real: COMPLETADA (game.c/.h con
+  física; el servidor simula ~60 ticks/seg y envía MSG_STATE con el score;
+  partida de práctica 1 jugador vs IA mientras llega el matchmaking en Fase 7).
 - Fase 7 — Emparejamiento (matchmaking): PENDIENTE.
 - Fase 8 — Robustez (peores casos): PENDIENTE.
 - Fase 9 — Despliegue AWS + documentación final + UML: PENDIENTE.
