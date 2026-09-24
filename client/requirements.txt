@@ -1,0 +1,3 @@
+# Dependencias del cliente Pong (Python)
+# Instalar con:  pip install -r requirements.txt
+pygame>=2.1.0
