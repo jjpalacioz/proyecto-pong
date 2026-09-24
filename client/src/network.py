@@ -37,6 +37,9 @@ class PongClientNet:
         self.host = host
         self.port = port
         self.sock = None
+        # Buffer interno para acumular bytes en modo no bloqueante. Si un
+        # mensaje llega partido, guardamos lo recibido aqui y completamos luego.
+        self._buffer = b""
 
     # ------------------------------------------------------------------
     #  Conexion / desconexion
@@ -124,6 +127,39 @@ class PongClientNet:
     # ------------------------------------------------------------------
     #  Mensajes especificos (comodos para el resto del cliente)
     # ------------------------------------------------------------------
+    def recv_message_nonblocking(self):
+        """
+        Version para el bucle de juego (socket en modo no bloqueante).
+        Devuelve (type, payload) si hay un mensaje COMPLETO disponible, o None
+        si aun no llego entero. Usa un buffer interno para no perder bytes si
+        el mensaje viene partido en varias lecturas (clave con TCP).
+        """
+        # 1. Traer al buffer todos los bytes disponibles ahora mismo.
+        try:
+            while True:
+                chunk = self.sock.recv(4096)
+                if not chunk:
+                    raise ConnectionClosed()
+                self._buffer += chunk
+        except BlockingIOError:
+            pass  # no hay mas datos por ahora: normal en modo no bloqueante
+
+        # 2. Ver si ya tenemos un mensaje completo en el buffer.
+        if len(self._buffer) < p.HEADER_SIZE:
+            return None
+        magic, version, msg_type, length = struct.unpack(
+            "!HBBH", self._buffer[:p.HEADER_SIZE])
+        if magic != p.PROTO_MAGIC:
+            raise ValueError("MAGIC invalido en la respuesta del servidor")
+
+        total = p.HEADER_SIZE + length
+        if len(self._buffer) < total:
+            return None  # el payload aun no llego completo
+
+        payload = self._buffer[p.HEADER_SIZE:total]
+        self._buffer = self._buffer[total:]   # quitar el mensaje ya consumido
+        return msg_type, payload
+
     def register(self, nickname, email):
         """
         Envia MSG_REGISTER con nickname y email.

@@ -63,6 +63,9 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if app["state"] == "REGISTER":
                     _handle_register_key(event, app, net)
+                elif app["state"] == "WAITING" and event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    # Al presionar ENTER en la sala de espera, pedimos jugar.
+                    _start_game(app, net)
 
         # ==============================================================
         #  2. DIBUJAR SEGUN EL ESTADO
@@ -76,9 +79,11 @@ def main():
         elif s == "WAITING":
             ui.draw_message(screen, small_font,
                             [f"Registrado como '{app['nickname']}' (id={app['player_id']})",
-                             "Esperando rival... (matchmaking en la Fase 7)"])
+                             "Presiona ENTER para jugar"])
 
         elif s == "PLAYING":
+            # En cada frame: enviar el input actual y recibir los estados.
+            _play_step(app, net)
             if app["game_state"]:
                 ui.draw_game(screen, app["game_state"], font)
             else:
@@ -167,6 +172,57 @@ def _try_register(app, net):
         app["state"] = "ERROR"
     except (OSError, ValueError) as e:
         app["error_msg"] = f"No se pudo conectar/registrar: {e}"
+        app["state"] = "ERROR"
+
+
+def _start_game(app, net):
+    """Pide jugar (MSG_QUEUE) y pone el socket en modo no bloqueante para el
+    bucle de juego, de modo que recibir estados no congele la ventana."""
+    try:
+        net.send_queue()
+        net.sock.setblocking(False)   # no bloquear al recibir estados
+        app["state"] = "PLAYING"
+    except (OSError, network.ConnectionClosed) as e:
+        app["error_msg"] = f"No se pudo iniciar la partida: {e}"
+        app["state"] = "ERROR"
+
+
+def _play_step(app, net):
+    """
+    Un paso del bucle de juego (se llama cada frame):
+      1. Lee las teclas de flecha y envia MSG_INPUT (arriba/abajo/quieto).
+      2. Recibe TODOS los MSG_STATE que hayan llegado (sin bloquear) y guarda
+         el ultimo para dibujarlo. Tambien maneja MSG_GAME_OVER.
+    """
+    # --- 1. Enviar input segun las teclas presionadas ahora mismo ---
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_UP]:
+        direction = p.DIR_UP
+    elif keys[pygame.K_DOWN]:
+        direction = p.DIR_DOWN
+    else:
+        direction = p.DIR_NONE
+    try:
+        net.send_input(direction)
+    except (OSError, network.ConnectionClosed):
+        app["error_msg"] = "Conexion perdida"
+        app["state"] = "ERROR"
+        return
+
+    # --- 2. Recibir los estados disponibles (modo no bloqueante) ---
+    try:
+        for _ in range(20):   # procesar hasta 20 mensajes por frame
+            result = net.recv_message_nonblocking()
+            if result is None:
+                break   # no hay mas mensajes completos por ahora
+            msg_type, payload = result
+            if msg_type == p.MSG_STATE:
+                app["game_state"] = network.parse_state(payload)
+            elif msg_type == p.MSG_GAME_OVER:
+                app["state"] = "GAMEOVER"
+                return
+    except network.ConnectionClosed:
+        app["error_msg"] = "El servidor cerro la conexion"
         app["state"] = "ERROR"
 
 
