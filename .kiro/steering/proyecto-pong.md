@@ -92,7 +92,8 @@ Protocolos". Fecha límite: **22 de octubre de 2026, 23:59**.
 - Fase 2 — Servidor C básico (socket/bind/listen/accept, logger, Makefile): COMPLETADA.
 - Fase 3 — Registro de clientes (framing, net, parsing, validaciones): COMPLETADA.
 - Fase 4 — Concurrencia con hilos (thread-per-client, mutex): COMPLETADA.
-- Fase 5 — Cliente Python + GUI Pygame: PENDIENTE.
+- Fase 5 — Cliente Python + GUI Pygame: COMPLETADA (protocol.py, network.py,
+  ui.py, main.py; registro funcional contra el servidor C; ventana base).
 - Fase 6 — Lógica del juego + score en tiempo real: PENDIENTE.
 - Fase 7 — Emparejamiento (matchmaking): PENDIENTE.
 - Fase 8 — Robustez (peores casos): PENDIENTE.
