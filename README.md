@@ -105,7 +105,32 @@ y el código adecuado, **sin caerse**.
 > para soportar la concurrencia que se añade en la Fase 4.
 
 ### 2.4 Cliente (Python + Pygame)
-*(Pendiente)*
+
+El cliente está escrito en **Python** con **Pygame**. Estructura en `client/src/`:
+
+- `protocol.py` — constantes del protocolo (coinciden byte a byte con el servidor C).
+- `network.py` — conexión TCP y framing binario con `struct` (formato `!`,
+  big-endian, equivalente a `htons`/`ntohs` del servidor).
+- `ui.py` — funciones de dibujo (campo, paletas, pelota, score, registro).
+- `main.py` — programa principal con la máquina de estados del cliente.
+
+**Separación de capas:** `network.py`/`protocol.py` no dependen de Pygame (solo
+red), lo que permite probar la comunicación sin interfaz gráfica.
+
+**Ejecutar:**
+```bash
+cd client
+pip install -r requirements.txt
+python src/main.py <IP_SERVIDOR> <PUERTO>   # ej: python src/main.py 127.0.0.1 5000
+```
+
+**Registro (Fase 5):** el cliente abre una ventana, el usuario escribe nickname
+y email (TAB para cambiar de campo, ENTER para registrarse), y el cliente envía
+`MSG_REGISTER` y procesa la respuesta del servidor. El movimiento y el estado del
+juego en tiempo real se implementan en la Fase 6.
+
+> El cliente **no calcula física**: solo captura las teclas y dibuja el estado
+> que le envía el servidor (que es la única fuente de verdad).
 
 ### 2.5 Concurrencia
 
