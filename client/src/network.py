@@ -48,6 +48,10 @@ class PongClientNet:
         """Abre el socket TCP y se conecta al servidor."""
         # AF_INET = IPv4, SOCK_STREAM = TCP (igual que el servidor en C).
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Los mensajes del juego son chicos (input de 7 bytes, estado de 16).
+        # Sin TCP_NODELAY, el sistema los retiene para juntarlos y la paleta
+        # y la pelota se sienten atrasadas.
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.connect((self.host, self.port))
 
     def close(self):
