@@ -43,12 +43,49 @@ def draw_field(screen):
         y += dash_h * 2
 
 
-def draw_game(screen, state, font):
+def draw_searching(screen, font, small_font, nickname):
+    """
+    Pantalla de emparejamiento, despues de enviar MSG_QUEUE.
+    El cliente todavia no sabe contra quien juega: solo espera.
+    """
+    screen.fill(BLACK)
+    title = font.render("Buscando rival...", True, WHITE)
+    screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 250)))
+    who = small_font.render(nickname, True, GRAY)
+    screen.blit(who, who.get_rect(center=(WINDOW_WIDTH // 2, 320)))
+
+
+def draw_match_found(screen, font, small_font, rival, side):
+    """
+    Pantalla de transicion: ya llego MSG_MATCH_FOUND y falta MSG_GAME_START.
+    Muestra el nickname del rival y el lado de la cancha que le toco.
+    """
+    screen.fill(BLACK)
+    title = font.render("Rival encontrado", True, WHITE)
+    screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 210)))
+    name = small_font.render(rival, True, GREEN)
+    screen.blit(name, name.get_rect(center=(WINDOW_WIDTH // 2, 280)))
+    if side == p.SIDE_LEFT:
+        lado = "Juegas a la izquierda"
+    elif side == p.SIDE_RIGHT:
+        lado = "Juegas a la derecha"
+    else:
+        lado = "Esperando que empiece la partida"
+    info = small_font.render(lado, True, WHITE)
+    screen.blit(info, info.get_rect(center=(WINDOW_WIDTH // 2, 330)))
+
+
+def draw_game(screen, state, font, rival=None, small_font=None):
     """
     Dibuja el estado del juego que llego del servidor (dict de parse_state):
     pelota, paletas y el SCORE en tiempo real.
+    Si 'rival' viene informado, se pinta arriba a la izquierda para que se vea
+    contra quien es la partida (dato de MSG_MATCH_FOUND).
     """
     draw_field(screen)
+    if rival and small_font is not None:
+        tag = small_font.render(f"vs {rival}", True, GRAY)
+        screen.blit(tag, (16, 12))
 
     # --- Paletas (escaladas a pixeles) ---
     paddle_h_px = int(p.PADDLE_HEIGHT * SCALE_Y)
