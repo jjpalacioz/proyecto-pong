@@ -160,7 +160,25 @@ con *mutex* para evitar condiciones de carrera:
 > confirmando que el mutex previene la condición de carrera.
 
 ### 2.6 Manejo de errores y casos límite
-*(Pendiente)*
+
+El contrato de robustez está en [`docs/EDGE_CASES.md`](docs/EDGE_CASES.md):
+qué hace el servidor ante un número mágico malo, una versión incorrecta, un
+`LENGTH` que no coincide, un registro inválido, un cliente que se cae y varios
+clientes atacando a la vez. El orden de validación (mágico, versión, tipo,
+longitud, estado, campos) está fijado ahí para que cliente y servidor
+respondan siempre el mismo código.
+
+Las pruebas viven en `tests/stress_protocol.py`. Arrancan el servidor, mandan
+cada caso y comprueban que el proceso no se cae:
+
+```bash
+make -C server
+python3 tests/stress_protocol.py
+```
+
+Queda por implementar en el servidor lo que esa misma prueba marca como
+pendiente: tipo desconocido, nickname repetido, ping/pong, cupo de clientes
+y el aviso al rival cuando alguien se desconecta en una partida 1 contra 1.
 
 ### 2.7 Despliegue en AWS Academy
 *(Pendiente)*

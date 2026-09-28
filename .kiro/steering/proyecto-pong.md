@@ -98,5 +98,8 @@ Protocolos". Fecha límite: **22 de octubre de 2026, 23:59**.
   física; el servidor simula ~60 ticks/seg y envía MSG_STATE con el score;
   partida de práctica 1 jugador vs IA mientras llega el matchmaking en Fase 7).
 - Fase 7 — Emparejamiento (matchmaking): PENDIENTE.
-- Fase 8 — Robustez (peores casos): PENDIENTE.
+- Fase 8 — Robustez (peores casos): DISEÑO COMPLETADO (docs/EDGE_CASES.md y
+  tests/stress_protocol.py). La implementación pendiente en el servidor
+  (tipo desconocido, nick repetido, ping/pong, cupo, desconexión del rival)
+  está listada como casos P en ese documento.
 - Fase 9 — Despliegue AWS + documentación final + UML: PENDIENTE.
