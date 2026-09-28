@@ -9,13 +9,16 @@ Uso:
 
 Estados de la aplicacion (maquina de estados del cliente, ver docs/PROTOCOL.md):
     REGISTER  -> el usuario escribe nickname/email y se registra
-    WAITING   -> registrado; esperando (matchmaking llega en la Fase 7)
-    PLAYING   -> en partida; enviar input y dibujar el estado (Fase 6)
+    WAITING   -> registrado; ENTER envia MSG_QUEUE
+    SEARCHING -> MSG_QUEUE enviado; pantalla "buscando rival..."
+    MATCHED   -> llego MSG_MATCH_FOUND; se muestra el nick del rival
+    PLAYING   -> llego MSG_GAME_START; enviar input y dibujar MSG_STATE
     GAMEOVER  -> fin de partida
     ERROR     -> se muestra un error
 
-NOTA: la parte de juego (PLAYING) se completa en la Fase 6, cuando el servidor
-envie MSG_STATE. En la Fase 5 dejamos funcionando el registro y la ventana base.
+Si el servidor aun no empareja (partida de practica de la Fase 6), responde
+MSG_GAME_START sin MSG_MATCH_FOUND. En ese caso se entra a jugar igual y el
+rival en pantalla queda como "la maquina".
 """
 
 import sys
@@ -47,6 +50,9 @@ def main():
         "error_msg": None,
         "player_id": None,
         "game_state": None,      # ultimo MSG_STATE recibido (Fase 6)
+        "rival": None,           # nickname del rival (MSG_MATCH_FOUND)
+        "side": None,            # SIDE_LEFT o SIDE_RIGHT
+        "match_id": None,
     }
 
     net = network.PongClientNet(host, port)
@@ -64,8 +70,9 @@ def main():
                 if app["state"] == "REGISTER":
                     _handle_register_key(event, app, net)
                 elif app["state"] == "WAITING" and event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    # Al presionar ENTER en la sala de espera, pedimos jugar.
-                    _start_game(app, net)
+                    # ENTER pide emparejamiento (MSG_QUEUE). La partida no
+                    # arranca aqui: hay que esperar al servidor.
+                    _start_search(app, net)
 
         # ==============================================================
         #  2. DIBUJAR SEGUN EL ESTADO
@@ -79,14 +86,26 @@ def main():
         elif s == "WAITING":
             ui.draw_message(screen, small_font,
                             [f"Registrado como '{app['nickname']}' (id={app['player_id']})",
-                             "Presiona ENTER para jugar"])
+                             "Presiona ENTER para buscar rival"])
+
+        elif s == "SEARCHING":
+            _poll_matchmaking(app, net)
+            if app["state"] == "SEARCHING":
+                ui.draw_searching(screen, font, small_font, app["nickname"])
+
+        elif s == "MATCHED":
+            _poll_matchmaking(app, net)
+            if app["state"] == "MATCHED":
+                ui.draw_match_found(screen, font, small_font,
+                                    app["rival"], app["side"])
 
         elif s == "PLAYING":
             # En cada frame: enviar el input actual y recibir los estados.
             _play_step(app, net)
-            if app["game_state"]:
-                ui.draw_game(screen, app["game_state"], font)
-            else:
+            if app["state"] == "PLAYING" and app["game_state"]:
+                ui.draw_game(screen, app["game_state"], font,
+                             rival=app["rival"], small_font=small_font)
+            elif app["state"] == "PLAYING":
                 ui.draw_message(screen, small_font, ["Iniciando partida..."])
 
         elif s == "GAMEOVER":
@@ -175,15 +194,54 @@ def _try_register(app, net):
         app["state"] = "ERROR"
 
 
-def _start_game(app, net):
-    """Pide jugar (MSG_QUEUE) y pone el socket en modo no bloqueante para el
-    bucle de juego, de modo que recibir estados no congele la ventana."""
+def _start_search(app, net):
+    """Envia MSG_QUEUE y pasa a la pantalla de busqueda.
+
+    El socket queda no bloqueante para poder dibujar 'buscando rival...'
+    mientras llegan MSG_MATCH_FOUND y MSG_GAME_START.
+    """
     try:
         net.send_queue()
-        net.sock.setblocking(False)   # no bloquear al recibir estados
-        app["state"] = "PLAYING"
+        net.sock.setblocking(False)
+        app["state"] = "SEARCHING"
     except (OSError, network.ConnectionClosed) as e:
-        app["error_msg"] = f"No se pudo iniciar la partida: {e}"
+        app["error_msg"] = f"No se pudo buscar rival: {e}"
+        app["state"] = "ERROR"
+
+
+def _poll_matchmaking(app, net):
+    """Lee los mensajes de emparejamiento que ya hayan llegado, sin frenar la ventana."""
+    try:
+        while True:
+            result = net.recv_message_nonblocking()
+            if result is None:
+                return
+            msg_type, payload = result
+            if msg_type == p.MSG_MATCH_FOUND:
+                info = network.parse_match_found(payload)
+                app["match_id"] = info["match_id"]
+                app["side"] = info["side"]
+                app["rival"] = info["rival"]
+                app["state"] = "MATCHED"
+            elif msg_type == p.MSG_GAME_START:
+                # Partida de practica: el servidor actual no manda MATCH_FOUND.
+                if not app["rival"]:
+                    app["rival"] = "la maquina"
+                app["state"] = "PLAYING"
+                return
+            elif msg_type in (p.MSG_ERROR, p.MSG_REGISTER_ERR):
+                code = network.parse_error(payload)
+                app["error_msg"] = p.ERROR_MESSAGES.get(code, f"Error {code}")
+                app["state"] = "ERROR"
+                return
+            elif msg_type == p.MSG_GAME_OVER:
+                app["state"] = "GAMEOVER"
+                return
+    except network.ConnectionClosed:
+        app["error_msg"] = "El servidor cerro la conexion"
+        app["state"] = "ERROR"
+    except (OSError, ValueError) as e:
+        app["error_msg"] = f"Error de emparejamiento: {e}"
         app["state"] = "ERROR"
 
 
