@@ -16,6 +16,7 @@
 #include <arpa/inet.h>  /* inet_ntoa, htonl, ntohs */
 
 #include <fcntl.h>      /* fcntl -> socket no bloqueante para leer input */
+#include <netinet/tcp.h> /* TCP_NODELAY: no demorar paquetes chicos */
 
 #include "logger.h"
 #include "protocol.h"
@@ -140,26 +141,41 @@ static void run_practice_game(int client_fd, const Player *player) {
     fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
 
     while (!g.game_over) {
-        /* --- 1. Leer TODOS los MSG_INPUT pendientes (sin bloquear) --- */
-        Message msg;
-        RecvResult res = recv_message(client_fd, &msg);
-        if (res == MSG_OK) {
-            if (msg.type == MSG_INPUT && msg.length >= 1) {
-                game_move_paddle(&g, SIDE_LEFT, msg.payload[0]);
-            } else if (msg.type == MSG_DISCONNECT) {
-                log_msg(LOG_INFO, "[fd=%d] Cliente pidio desconectar", client_fd);
+        /* --- 1. Vaciar los MSG_INPUT que se hayan acumulado y quedarse
+         * solo con el ultimo. El cliente manda una orden por frame; si aqui
+         * se aplicara de a una por tick, la paleta seguiria moviendose
+         * despues de soltar la tecla. --- */
+        int have_dir = 0;
+        uint8_t direction = DIR_NONE;
+        for (;;) {
+            Message msg;
+            RecvResult res = recv_message(client_fd, &msg);
+            if (res == MSG_OK) {
+                if (msg.type == MSG_INPUT && msg.length >= 1) {
+                    direction = msg.payload[0];
+                    have_dir = 1;
+                } else if (msg.type == MSG_DISCONNECT) {
+                    log_msg(LOG_INFO, "[fd=%d] Cliente pidio desconectar", client_fd);
+                    return;
+                }
+                continue;
+            }
+            if (res == MSG_CLOSED) {
+                log_msg(LOG_INFO, "[fd=%d] Cliente desconectado durante la partida", client_fd);
                 return;
             }
-        } else if (res == MSG_CLOSED) {
-            log_msg(LOG_INFO, "[fd=%d] Cliente desconectado durante la partida", client_fd);
-            return;
-        } else if (res == MSG_ERR_IO) {
-            /* En modo no bloqueante, "no hay datos" llega como error EAGAIN:
-             * eso NO es un problema, solo significa "sin input este tick". */
-            if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                log_msg(LOG_ERROR, "[fd=%d] Error de E/S en partida", client_fd);
-                return;
+            if (res == MSG_ERR_IO) {
+                /* En modo no bloqueante, "no hay datos" llega como EAGAIN:
+                 * eso NO es un problema, solo significa "sin input este tick". */
+                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                    log_msg(LOG_ERROR, "[fd=%d] Error de E/S en partida", client_fd);
+                    return;
+                }
             }
+            break;
+        }
+        if (have_dir) {
+            game_move_paddle(&g, SIDE_LEFT, direction);
         }
 
         /* --- 2. IA simple y JUGABLE: la paleta derecha sigue la pelota, pero
@@ -210,6 +226,11 @@ void *client_thread(void *arg) {
     int cport = ntohs(ctx->client_addr.sin_port);
 
     log_msg(LOG_INFO, "[fd=%d] Cliente conectado desde %s:%d", client_fd, ip, cport);
+
+    /* Sin esto, TCP junta los MSG_STATE (16 bytes) hasta ~40 ms antes de
+     * mandarlos. En un juego se siente como delay. TCP_NODELAY los envia ya. */
+    int nodelay = 1;
+    setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
 
     /* --- Fase de registro --- */
     Player player;

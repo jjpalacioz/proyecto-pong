@@ -269,7 +269,7 @@ def _play_step(app, net):
 
     # --- 2. Recibir los estados disponibles (modo no bloqueante) ---
     try:
-        for _ in range(20):   # procesar hasta 20 mensajes por frame
+        while True:
             result = net.recv_message_nonblocking()
             if result is None:
                 break   # no hay mas mensajes completos por ahora
