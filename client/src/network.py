@@ -213,3 +213,24 @@ def parse_state(payload):
 def parse_error(payload):
     """MSG_ERROR / MSG_REGISTER_ERR: [1 byte error_code] -> devuelve el codigo."""
     return payload[0] if payload else 0
+
+
+def parse_match_found(payload):
+    """
+    MSG_MATCH_FOUND: el servidor ya emparejo a este cliente con un rival.
+    Formato (docs/PROTOCOL.md):
+      [4 bytes match_id][1 byte side][1 byte len_rival][nickname del rival]
+    side: 0 = paleta izquierda, 1 = paleta derecha.
+    Devuelve un diccionario para que la ventana solo dibuje, sin tocar bytes.
+    """
+    if len(payload) < 6:
+        raise ValueError("MSG_MATCH_FOUND incompleto")
+    match_id, side, nick_len = struct.unpack("!IBB", payload[:6])
+    nick = payload[6:6 + nick_len]
+    if len(nick) != nick_len:
+        raise ValueError("nickname del rival incompleto")
+    return {
+        "match_id": match_id,
+        "side": side,
+        "rival": nick.decode("utf-8", errors="replace"),
+    }
