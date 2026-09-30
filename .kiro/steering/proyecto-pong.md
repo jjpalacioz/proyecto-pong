@@ -101,7 +101,9 @@ Protocolos". Fecha límite: **22 de octubre de 2026, 23:59**.
   espera; dos jugadores comparten un GameState; el host simula y difunde; el
   cliente maneja MATCH_FOUND/GAME_START; conteo de referencias para liberar).
 - Fase 8 — Robustez (peores casos): DISEÑO COMPLETADO (docs/EDGE_CASES.md y
-  tests/stress_protocol.py). La implementación pendiente en el servidor
-  (tipo desconocido, nick repetido, ping/pong, cupo, desconexión del rival)
-  está listada como casos P en ese documento.
+  tests/stress_protocol.py). El servidor YA implementa P01-P07 (tipo
+  desconocido, nick repetido, ping/pong, bytes de sobra, input fuera de
+  partida, queue mal formado, servidor lleno=64) + timeout de lectura
+  (registry.c/.h). Falta P08: avisar MSG_GAME_OVER al jugador que queda cuando
+  el rival se desconecta a mitad de partida (en match.c).
 - Fase 9 — Despliegue AWS + documentación final + UML: PENDIENTE.
