@@ -24,6 +24,7 @@
 #include "player.h"
 #include "game.h"       /* GameState y fisica del juego */
 #include "match.h"      /* matchmaking 1vs1 */
+#include "registry.h"   /* registro global: nicks en uso y cupo (P02, P07) */
 
 /* --------------------------------------------------------------------------
  *  Estado GLOBAL compartido por todos los hilos.
@@ -42,6 +43,24 @@ static uint32_t assign_player_id(void) {
     uint32_t id = next_player_id++;     /* leer e incrementar (atomico gracias al lock) */
     pthread_mutex_unlock(&id_mutex);    /* salir de la zona critica */
     return id;
+}
+
+/* --------------------------------------------------------------------------
+ *  is_known_type: dice si un TYPE pertenece al vocabulario del protocolo.
+ *  Sirve para P01: distinguir un tipo DESCONOCIDO (ERR_UNKNOWN_TYPE) de uno
+ *  conocido pero usado fuera de lugar (ERR_NOT_REGISTERED).
+ * -------------------------------------------------------------------------- */
+static int is_known_type(uint8_t type) {
+    switch (type) {
+        case MSG_REGISTER: case MSG_REGISTER_OK: case MSG_REGISTER_ERR:
+        case MSG_QUEUE:    case MSG_MATCH_FOUND:
+        case MSG_INPUT:    case MSG_STATE: case MSG_GAME_START: case MSG_GAME_OVER:
+        case MSG_PING:     case MSG_PONG:
+        case MSG_ERROR:    case MSG_DISCONNECT:
+            return 1;
+        default:
+            return 0;
+    }
 }
 
 /* --------------------------------------------------------------------------
@@ -73,6 +92,28 @@ static int handle_register(int client_fd, const Message *msg, Player *player) {
     }
     memcpy(player->email, p, len_mail);
     player->email[len_mail] = '\0';
+    remaining -= len_mail;
+
+    /* P04: tras el nick y el email NO puede sobrar ni faltar ni un byte.
+     * Si quedan bytes sin consumir, el mensaje esta mal formado. */
+    if (remaining != 0) {
+        send_error(client_fd, ERR_BAD_LENGTH);
+        return 0;
+    }
+
+    /* P02/P07: intentar reservar el nickname en el registro global.
+     * Puede fallar si el servidor esta lleno o el nick ya esta en uso. */
+    int r = registry_add(player->nickname);
+    if (r == -1) {
+        send_error(client_fd, ERR_SERVER_FULL);
+        log_msg(LOG_WARN, "[fd=%d] Registro rechazado: servidor lleno", client_fd);
+        return 0;
+    } else if (r == -2) {
+        send_error(client_fd, ERR_NICK_TAKEN);
+        log_msg(LOG_WARN, "[fd=%d] Registro rechazado: nick '%s' en uso",
+                client_fd, player->nickname);
+        return 0;
+    }
 
     /* --- registro valido: asignar id (thread-safe) y responder --- */
     player->id = assign_player_id();
@@ -86,134 +127,11 @@ static int handle_register(int client_fd, const Message *msg, Player *player) {
 }
 
 /* --------------------------------------------------------------------------
- *  send_state: empaqueta el GameState en un MSG_STATE y lo envia al cliente.
- *  Payload (10 bytes): ball_x(2) ball_y(2) paddle_left(2) paddle_right(2)
- *                      score_left(1) score_right(1). Todo en orden de red.
- * -------------------------------------------------------------------------- */
-/* Recorta un valor float al rango [0, max] y lo devuelve como uint16_t.
- * Evita que una posicion negativa (pelota saliendo del campo) se "envuelva"
- * a un numero enorme al convertir a entero sin signo. */
-static uint16_t clamp_u16(float v, float max) {
-    if (v < 0) v = 0;
-    if (v > max) v = max;
-    return (uint16_t)v;
-}
-
-static int send_state(int client_fd, const GameState *g) {
-    uint8_t payload[10];
-    uint16_t ball_x = htons(clamp_u16(g->ball_x, FIELD_WIDTH));
-    uint16_t ball_y = htons(clamp_u16(g->ball_y, FIELD_HEIGHT));
-    uint16_t pl     = htons(clamp_u16(g->paddle_left, FIELD_HEIGHT));
-    uint16_t pr     = htons(clamp_u16(g->paddle_right, FIELD_HEIGHT));
-
-    memcpy(&payload[0], &ball_x, 2);
-    memcpy(&payload[2], &ball_y, 2);
-    memcpy(&payload[4], &pl, 2);
-    memcpy(&payload[6], &pr, 2);
-    payload[8] = g->score_left;
-    payload[9] = g->score_right;
-
-    return send_message(client_fd, MSG_STATE, payload, sizeof(payload));
-}
-
-/* --------------------------------------------------------------------------
- *  run_practice_game: partida de PRACTICA de un solo cliente (Fase 6).
- * --------------------------------------------------------------------------
- *  Permite ver el juego funcionando ANTES de tener matchmaking (Fase 7).
- *  El cliente controla la paleta izquierda; la derecha la controla una IA
- *  simple que sigue la pelota. El servidor simula la fisica ~60 veces/seg y
- *  envia MSG_STATE (con el score) en cada tick -> score en tiempo real.
- *
- *  Para no bloquear el juego esperando input, el socket se pone en modo NO
- *  bloqueante: se leen los MSG_INPUT que haya llegado y si no hay, se sigue.
- * -------------------------------------------------------------------------- */
-static void run_practice_game(int client_fd, const Player *player) {
-    log_msg(LOG_INFO, "[fd=%d] Iniciando partida de practica para '%s'",
-            client_fd, player->nickname);
-
-    /* Avisar al cliente que la partida arranca. */
-    send_message(client_fd, MSG_GAME_START, NULL, 0);
-
-    GameState g;
-    game_init(&g);
-
-    /* Poner el socket en modo no bloqueante para leer input sin frenar. */
-    int flags = fcntl(client_fd, F_GETFL, 0);
-    fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
-
-    while (!g.game_over) {
-        /* --- 1. Vaciar los MSG_INPUT que se hayan acumulado y quedarse
-         * solo con el ultimo. El cliente manda una orden por frame; si aqui
-         * se aplicara de a una por tick, la paleta seguiria moviendose
-         * despues de soltar la tecla. --- */
-        int have_dir = 0;
-        uint8_t direction = DIR_NONE;
-        for (;;) {
-            Message msg;
-            RecvResult res = recv_message(client_fd, &msg);
-            if (res == MSG_OK) {
-                if (msg.type == MSG_INPUT && msg.length >= 1) {
-                    direction = msg.payload[0];
-                    have_dir = 1;
-                } else if (msg.type == MSG_DISCONNECT) {
-                    log_msg(LOG_INFO, "[fd=%d] Cliente pidio desconectar", client_fd);
-                    return;
-                }
-                continue;
-            }
-            if (res == MSG_CLOSED) {
-                log_msg(LOG_INFO, "[fd=%d] Cliente desconectado durante la partida", client_fd);
-                return;
-            }
-            if (res == MSG_ERR_IO) {
-                /* En modo no bloqueante, "no hay datos" llega como EAGAIN:
-                 * eso NO es un problema, solo significa "sin input este tick". */
-                if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                    log_msg(LOG_ERROR, "[fd=%d] Error de E/S en partida", client_fd);
-                    return;
-                }
-            }
-            break;
-        }
-        if (have_dir) {
-            game_move_paddle(&g, SIDE_LEFT, direction);
-        }
-
-        /* --- 2. IA simple y JUGABLE: la paleta derecha sigue la pelota, pero
-         * solo cuando la pelota viene hacia ella y con una "zona muerta" amplia,
-         * de modo que a veces falle y el jugador pueda anotar. --- */
-        if (g.ball_vx > 0) {  /* solo reacciona si la pelota va hacia la derecha */
-            float paddle_center = g.paddle_right + PADDLE_HEIGHT / 2.0f;
-            if (g.ball_y < paddle_center - 25) {
-                game_move_paddle(&g, SIDE_RIGHT, DIR_UP);
-            } else if (g.ball_y > paddle_center + 25) {
-                game_move_paddle(&g, SIDE_RIGHT, DIR_DOWN);
-            }
-        }
-
-        /* --- 3. Avanzar la fisica un tick --- */
-        game_tick(&g);
-
-        /* --- 4. Enviar el estado (incluye el score) al cliente --- */
-        if (send_state(client_fd, &g) < 0) {
-            log_msg(LOG_INFO, "[fd=%d] No se pudo enviar estado (cliente cerro?)", client_fd);
-            return;
-        }
-
-        /* --- 5. Dormir ~1/60 s para ir a ~60 ticks por segundo --- */
-        usleep(1000000 / TICK_RATE);
-    }
-
-    /* --- Fin de partida: avisar ganador y score final --- */
-    uint8_t payload[3] = { g.winner_side, g.score_left, g.score_right };
-    send_message(client_fd, MSG_GAME_OVER, payload, sizeof(payload));
-    log_msg(LOG_INFO, "[fd=%d] Partida terminada. Ganador=%s  score %d-%d",
-            client_fd, g.winner_side == SIDE_LEFT ? "izquierda" : "derecha",
-            g.score_left, g.score_right);
-}
-
-/* --------------------------------------------------------------------------
  *  client_thread: punto de entrada del hilo. Atiende un cliente completo.
+ * --------------------------------------------------------------------------
+ *  Nota: la partida de practica (1 jugador vs IA) de la Fase 6 se retiro al
+ *  entrar el matchmaking real 1vs1 de la Fase 7. La logica de juego y el envio
+ *  de estados viven ahora en match.c.
  * -------------------------------------------------------------------------- */
 void *client_thread(void *arg) {
     /* Recuperar el contexto que nos paso el hilo principal. */
@@ -232,6 +150,15 @@ void *client_thread(void *arg) {
      * mandarlos. En un juego se siente como delay. TCP_NODELAY los envia ya. */
     int nodelay = 1;
     setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
+
+    /* Timeout de lectura (SO_RCVTIMEO): un cliente que anuncia un LENGTH grande
+     * y no manda los bytes no puede ocupar un hilo para siempre. A los 15 s sin
+     * datos, recv falla con EAGAIN/EWOULDBLOCK y cerramos esa conexion. Solo se
+     * afecta a ese cliente; los demas siguen. (Contrato de la Fase 8.) */
+    struct timeval tv;
+    tv.tv_sec = 15;
+    tv.tv_usec = 0;
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     /* --- Fase de registro --- */
     Player player;
@@ -267,7 +194,23 @@ void *client_thread(void *arg) {
 
         if (msg.type == MSG_REGISTER) {
             registered = handle_register(client_fd, &msg, &player);
+        } else if (msg.type == MSG_PING) {
+            /* P03: PING es legal en cualquier estado -> responder PONG. */
+            if (msg.length != 0) {
+                send_error(client_fd, ERR_BAD_LENGTH);
+            } else {
+                send_message(client_fd, MSG_PONG, NULL, 0);
+            }
+        } else if (msg.type == MSG_QUEUE && msg.length != 0) {
+            /* P06: la FORMA del mensaje se valida antes que el estado. Un
+             * MSG_QUEUE bien tipado pero con LENGTH != 0 es ERR_BAD_LENGTH. */
+            send_error(client_fd, ERR_BAD_LENGTH);
+        } else if (!is_known_type(msg.type)) {
+            /* P01: TYPE que no existe en el protocolo -> ERR_UNKNOWN_TYPE. */
+            log_msg(LOG_WARN, "[fd=%d] Tipo desconocido 0x%02X", client_fd, msg.type);
+            send_error(client_fd, ERR_UNKNOWN_TYPE);
         } else {
+            /* Tipo conocido pero ilegal sin registrarse (ej. QUEUE, INPUT). */
             log_msg(LOG_WARN, "[fd=%d] Se esperaba MSG_REGISTER pero llego 0x%02X",
                     client_fd, msg.type);
             send_error(client_fd, ERR_NOT_REGISTERED);
@@ -278,30 +221,65 @@ void *client_thread(void *arg) {
         log_msg(LOG_INFO, "[fd=%d] Jugador '%s' (id=%u) registrado y listo",
                 client_fd, player.nickname, player.id);
 
-        /* Esperar a que el cliente pida jugar (MSG_QUEUE) y entrar al
-         * matchmaking real 1vs1 (Fase 7): el jugador queda en cola hasta que
-         * llega un rival, y entonces ambos comparten una misma partida. */
-        Message msg;
-        RecvResult res = recv_message(client_fd, &msg);
-        if (res == MSG_OK && msg.type == MSG_QUEUE) {
-            /* MSG_QUEUE con payload[0]==1 -> modo PRACTICA (contra la IA).
-             * Sin payload o payload[0]==0 -> matchmaking real 1vs1. */
-            if (msg.length >= 1 && msg.payload[0] == 1) {
-                run_practice_game(client_fd, &player);
-            } else {
+        /* El cliente ya registrado puede: pedir jugar (MSG_QUEUE), hacer
+         * ping (MSG_PING) o desconectar. Manejamos cada caso y validamos la
+         * forma de los mensajes antes que el estado (P05, P06). */
+        int keep = 1;
+        while (keep) {
+            Message msg;
+            RecvResult res = recv_message(client_fd, &msg);
+
+            if (res == MSG_CLOSED) {
+                log_msg(LOG_INFO, "[fd=%d] Cliente desconectado tras registrarse", client_fd);
+                break;
+            } else if (res == MSG_ERR_MAGIC) {
+                send_error(client_fd, ERR_BAD_MAGIC); break;
+            } else if (res == MSG_ERR_VERSION) {
+                send_error(client_fd, ERR_BAD_VERSION); break;
+            } else if (res != MSG_OK) {
+                break;  /* error de E/S */
+            }
+
+            if (msg.type == MSG_PING) {
+                /* P03: ping/pong (keepalive). */
+                if (msg.length != 0) send_error(client_fd, ERR_BAD_LENGTH);
+                else                 send_message(client_fd, MSG_PONG, NULL, 0);
+
+            } else if (msg.type == MSG_DISCONNECT) {
+                log_msg(LOG_INFO, "[fd=%d] Cliente pidio desconectar", client_fd);
+                break;
+
+            } else if (msg.type == MSG_QUEUE) {
+                /* P06: MSG_QUEUE debe tener LENGTH = 0. La forma se valida
+                 * antes que el estado. */
+                if (msg.length != 0) {
+                    send_error(client_fd, ERR_BAD_LENGTH);
+                    continue;
+                }
+                /* Matchmaking real 1vs1: queda en cola hasta que llegue rival. */
                 Match *m = NULL;
                 int side = SIDE_LEFT;
                 if (matchmaking_join(client_fd, &player, &m, &side)) {
                     match_run(m, side);
-                    /* Ambos hilos liberan su referencia; el ultimo en salir
-                     * libera la memoria del Match (cuenta de referencias). */
                     match_release(m);
                 }
+                keep = 0;  /* tras la partida, este cliente termina */
+
+            } else if (msg.type == MSG_INPUT) {
+                /* P05: INPUT fuera de una partida -> avisar con MSG_ERROR
+                 * (antes se cerraba el socket en silencio). */
+                send_error(client_fd, ERR_NOT_REGISTERED);
+
+            } else if (!is_known_type(msg.type)) {
+                send_error(client_fd, ERR_UNKNOWN_TYPE);  /* P01 */
+
+            } else {
+                send_error(client_fd, ERR_NOT_REGISTERED);
             }
-        } else if (res == MSG_OK) {
-            log_msg(LOG_WARN, "[fd=%d] Se esperaba MSG_QUEUE pero llego 0x%02X",
-                    client_fd, msg.type);
         }
+
+        /* Al salir, liberar el nickname del registro global. */
+        registry_remove(player.nickname);
     }
 
     /* --- Limpieza: cerrar socket y liberar el contexto --- */
