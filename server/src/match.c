@@ -183,11 +183,11 @@ void match_run(Match *m, int side) {
         set_nonblocking(my_fd);
 
         /* -------- HOST: simula la fisica y difunde el estado -------- */
+        int left_gone = 0, right_gone = 0;
         while (m->active && !m->game.game_over) {
             /* Leer mi propio input (paleta izquierda). */
             if (!poll_input(m, m->fd_left, SIDE_LEFT)) {
-                m->active = 0;
-                break;
+                left_gone = 1; m->active = 0; break;
             }
 
             /* Avanzar la fisica (bajo el lock, por si el otro hilo mueve su paleta). */
@@ -196,16 +196,29 @@ void match_run(Match *m, int side) {
             GameState snapshot = m->game;  /* copia para enviar sin tener el lock */
             pthread_mutex_unlock(&m->lock);
 
-            /* Enviar el estado a AMBOS jugadores. */
-            if (send_state(m->fd_left, &snapshot) < 0)  { m->active = 0; break; }
-            if (send_state(m->fd_right, &snapshot) < 0) { m->active = 0; break; }
+            /* Enviar el estado a AMBOS jugadores. Si un send falla, ese jugador
+             * se desconecto (P08): la partida termina y gana el que queda. */
+            if (send_state(m->fd_left, &snapshot) < 0)  { left_gone = 1;  m->active = 0; break; }
+            if (send_state(m->fd_right, &snapshot) < 0) { right_gone = 1; m->active = 0; break; }
 
             usleep(1000000 / TICK_RATE);
         }
 
-        /* Fin de partida: avisar a ambos con ganador y score final. */
+        /* Fin de partida: determinar ganador y avisar a ambos. */
         GameState *g = &m->game;
-        uint8_t payload[3] = { g->winner_side, g->score_left, g->score_right };
+        uint8_t winner = g->winner_side;
+        if (left_gone && !right_gone) {
+            winner = SIDE_RIGHT;   /* P08: se fue la izquierda, gana la derecha */
+            log_msg(LOG_INFO, "Match %u: '%s' abandono, gana '%s'",
+                    m->match_id, m->player_left.nickname, m->player_right.nickname);
+        } else if (right_gone && !left_gone) {
+            winner = SIDE_LEFT;    /* P08: se fue la derecha, gana la izquierda */
+            log_msg(LOG_INFO, "Match %u: '%s' abandono, gana '%s'",
+                    m->match_id, m->player_right.nickname, m->player_left.nickname);
+        }
+        uint8_t payload[3] = { winner, g->score_left, g->score_right };
+        /* Se envia a ambos; al que se fue simplemente falla sin crashear
+         * (send usa MSG_NOSIGNAL). El que queda recibe su MSG_GAME_OVER. */
         send_message(m->fd_left,  MSG_GAME_OVER, payload, sizeof(payload));
         send_message(m->fd_right, MSG_GAME_OVER, payload, sizeof(payload));
         m->active = 0;
