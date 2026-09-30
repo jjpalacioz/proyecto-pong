@@ -97,7 +97,9 @@ Protocolos". Fecha límite: **22 de octubre de 2026, 23:59**.
 - Fase 6 — Lógica del juego + score en tiempo real: COMPLETADA (game.c/.h con
   física; el servidor simula ~60 ticks/seg y envía MSG_STATE con el score;
   partida de práctica 1 jugador vs IA mientras llega el matchmaking en Fase 7).
-- Fase 7 — Emparejamiento (matchmaking): PENDIENTE.
+- Fase 7 — Emparejamiento (matchmaking): COMPLETADA (match.c/.h con cola de
+  espera; dos jugadores comparten un GameState; el host simula y difunde; el
+  cliente maneja MATCH_FOUND/GAME_START; conteo de referencias para liberar).
 - Fase 8 — Robustez (peores casos): DISEÑO COMPLETADO (docs/EDGE_CASES.md y
   tests/stress_protocol.py). La implementación pendiente en el servidor
   (tipo desconocido, nick repetido, ping/pong, cupo, desconexión del rival)
