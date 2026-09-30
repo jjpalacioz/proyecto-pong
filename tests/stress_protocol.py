@@ -398,16 +398,29 @@ def c21_cierre_sin_datos():
 
 
 def c22_cierre_a_mitad_de_partida():
-    sock = connect()
+    # Con matchmaking 1vs1 (Fase 7) se necesitan DOS jugadores para que arranque
+    # la partida. Emparejamos dos, confirmamos MSG_GAME_START en ambos y cerramos
+    # uno a mitad; el servidor no debe caerse.
+    a = connect()
+    b = connect()
     try:
-        send_register(sock, unique_nick(), "a@b.co")
-        expect_register_ok(sock)
-        send_bytes(sock, header(p.MSG_QUEUE, 0))
-        start = read_message(sock)
-        if start is None or start[0] != p.MSG_GAME_START:
-            raise CaseError("no llego MSG_GAME_START tras MSG_QUEUE")
+        send_register(a, unique_nick(), "a@b.co"); expect_register_ok(a)
+        send_register(b, unique_nick(), "b@b.co"); expect_register_ok(b)
+        send_bytes(a, header(p.MSG_QUEUE, 0))
+        send_bytes(b, header(p.MSG_QUEUE, 0))
+        # Ambos deben recibir MATCH_FOUND y luego GAME_START (en algún orden).
+        got_start = False
+        for sock in (a, b):
+            for _ in range(4):
+                msg = read_message(sock)
+                if msg and msg[0] == p.MSG_GAME_START:
+                    got_start = True
+                    break
+        if not got_start:
+            raise CaseError("no llego MSG_GAME_START tras emparejar")
     finally:
-        sock.close()
+        a.close()   # un jugador se cae a mitad
+        b.close()
     time.sleep(0.05)
     assert_still_serving()
 
@@ -437,19 +450,30 @@ def c23_varios_clientes_malos():
 
 
 def c24_direccion_invalida_en_partida():
-    sock = connect()
+    # Igual que C22: se necesitan dos jugadores. Uno manda una direccion de input
+    # invalida (9) y el servidor debe seguir enviando MSG_STATE sin caerse.
+    a = connect()
+    b = connect()
     try:
-        send_register(sock, unique_nick(), "a@b.co")
-        expect_register_ok(sock)
-        send_bytes(sock, header(p.MSG_QUEUE, 0))
-        start = read_message(sock)
-        if start is None or start[0] != p.MSG_GAME_START:
+        send_register(a, unique_nick(), "a@b.co"); expect_register_ok(a)
+        send_register(b, unique_nick(), "b@b.co"); expect_register_ok(b)
+        send_bytes(a, header(p.MSG_QUEUE, 0))
+        send_bytes(b, header(p.MSG_QUEUE, 0))
+        # Esperar a que 'a' este en partida (llego GAME_START).
+        started = False
+        deadline = time.time() + 2.0
+        while time.time() < deadline and not started:
+            msg = read_message(a)
+            if msg and msg[0] == p.MSG_GAME_START:
+                started = True
+        if not started:
             raise CaseError("no llego MSG_GAME_START")
-        send_bytes(sock, header(p.MSG_INPUT, 1) + bytes([9]))
+        # Direccion invalida (9): no debe mover la paleta ni caer el servidor.
+        send_bytes(a, header(p.MSG_INPUT, 1) + bytes([9]))
         vio_estado = False
-        deadline = time.time() + 1.0
+        deadline = time.time() + 1.5
         while time.time() < deadline:
-            msg = read_message(sock)
+            msg = read_message(a)
             if msg is None:
                 break
             if msg[0] == p.MSG_STATE and len(msg[1]) == 10:
@@ -458,7 +482,8 @@ def c24_direccion_invalida_en_partida():
         if not vio_estado:
             raise CaseError("despues de un input invalido dejo de llegar MSG_STATE")
     finally:
-        sock.close()
+        a.close()
+        b.close()
     assert_still_serving()
 
 
