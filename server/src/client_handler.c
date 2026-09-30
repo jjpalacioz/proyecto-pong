@@ -23,6 +23,7 @@
 #include "protocol_io.h"
 #include "player.h"
 #include "game.h"       /* GameState y fisica del juego */
+#include "match.h"      /* matchmaking 1vs1 */
 
 /* --------------------------------------------------------------------------
  *  Estado GLOBAL compartido por todos los hilos.
@@ -277,13 +278,26 @@ void *client_thread(void *arg) {
         log_msg(LOG_INFO, "[fd=%d] Jugador '%s' (id=%u) registrado y listo",
                 client_fd, player.nickname, player.id);
 
-        /* Esperar a que el cliente pida jugar (MSG_QUEUE) y arrancar la
-         * partida de practica (Fase 6). El matchmaking real 1vs1 llega en la
-         * Fase 7; por ahora, MSG_QUEUE inicia una partida contra la IA. */
+        /* Esperar a que el cliente pida jugar (MSG_QUEUE) y entrar al
+         * matchmaking real 1vs1 (Fase 7): el jugador queda en cola hasta que
+         * llega un rival, y entonces ambos comparten una misma partida. */
         Message msg;
         RecvResult res = recv_message(client_fd, &msg);
         if (res == MSG_OK && msg.type == MSG_QUEUE) {
-            run_practice_game(client_fd, &player);
+            /* MSG_QUEUE con payload[0]==1 -> modo PRACTICA (contra la IA).
+             * Sin payload o payload[0]==0 -> matchmaking real 1vs1. */
+            if (msg.length >= 1 && msg.payload[0] == 1) {
+                run_practice_game(client_fd, &player);
+            } else {
+                Match *m = NULL;
+                int side = SIDE_LEFT;
+                if (matchmaking_join(client_fd, &player, &m, &side)) {
+                    match_run(m, side);
+                    /* Ambos hilos liberan su referencia; el ultimo en salir
+                     * libera la memoria del Match (cuenta de referencias). */
+                    match_release(m);
+                }
+            }
         } else if (res == MSG_OK) {
             log_msg(LOG_WARN, "[fd=%d] Se esperaba MSG_QUEUE pero llego 0x%02X",
                     client_fd, msg.type);
