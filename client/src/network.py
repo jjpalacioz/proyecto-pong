@@ -238,3 +238,23 @@ def parse_match_found(payload):
         "side": side,
         "rival": nick.decode("utf-8", errors="replace"),
     }
+
+
+def parse_game_over(payload):
+    """
+    MSG_GAME_OVER: la partida termino.
+    Formato (docs/PROTOCOL.md y server/src/match.c):
+      [1 byte winner_side][1 byte score_left][1 byte score_right]
+    winner_side: 0 = gano la izquierda, 1 = gano la derecha.
+    Devuelve un diccionario para que la ventana dibuje el resultado
+    sin interpretar bytes. El orden es el mismo que arma el servidor
+    en match.c: ganador, marcador izquierdo, marcador derecho.
+    """
+    if len(payload) < 3:
+        raise ValueError("MSG_GAME_OVER incompleto")
+    winner_side, score_left, score_right = struct.unpack("!BBB", payload[:3])
+    return {
+        "winner_side": winner_side,
+        "score_left": score_left,
+        "score_right": score_right,
+    }
