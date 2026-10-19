@@ -66,13 +66,26 @@ El servidor está escrito en C usando la **API de Sockets Berkeley** directament
 
 ```
 server/
-├── include/
-│   ├── protocol.h   # constantes del protocolo (magic, tipos, errores, params)
-│   └── logger.h     # API del sistema de logging
-├── src/
-│   ├── server.c     # programa principal: socket → bind → listen → accept
-│   └── logger.c     # implementación del logger (consola + archivo)
-└── Makefile         # compilación con gcc
+├── include/            # headers (.h)
+│   ├── protocol.h      # constantes del protocolo (magic, tipos, errores, params)
+│   ├── logger.h        # API del sistema de logging
+│   ├── net.h           # recv_all / send_all (E/S robusta sobre TCP)
+│   ├── protocol_io.h   # recv_message / send_message (framing)
+│   ├── player.h        # perfil del jugador (id, nickname, email)
+│   ├── client_handler.h# atención de cada cliente en su hilo
+│   ├── game.h          # estado y física del juego
+│   ├── match.h         # emparejamiento 1vs1 y partida compartida
+│   └── registry.h      # registro global de clientes (nicks, cupo)
+├── src/                # implementación (.c)
+│   ├── server.c        # programa principal: socket → bind → listen → accept
+│   ├── logger.c        # logger (consola + archivo, thread-safe)
+│   ├── net.c           # E/S robusta
+│   ├── protocol_io.c   # framing del protocolo
+│   ├── client_handler.c# hilo por cliente: registro, validación, flujo
+│   ├── game.c          # física: pelota, rebotes, colisiones, score
+│   ├── match.c         # matchmaking y simulación de la partida
+│   └── registry.c      # nicks en uso y límite de clientes (thread-safe)
+└── Makefile            # compilación con gcc
 ```
 
 **Compilar y ejecutar:**
@@ -228,6 +241,25 @@ protocolo binario que en local.
 - El proyecto reforzó conceptos clave de redes: orden de bytes de red, la
   diferencia entre un *stream* (TCP) y un protocolo de mensajes, y la separación
   de responsabilidades entre presentación (cliente) y lógica (servidor).
+
+### Cumplimiento de requisitos del enunciado
+
+| Requisito | Estado |
+|-----------|--------|
+| Servidor en C con API de Sockets Berkeley (sin librerías de alto nivel) | ✅ |
+| Cliente con interfaz gráfica (Python + Pygame) | ✅ |
+| Protocolo de aplicación propio, **binario** (no texto) | ✅ |
+| Todo pasa por el servidor (sin comunicación cliente↔cliente) | ✅ |
+| Servidor concurrente (múltiples parejas con hilos) | ✅ |
+| Score en tiempo real en la interfaz | ✅ |
+| Registro de perfil (nickname + email) | ✅ |
+| Logger (consola + archivo de log) | ✅ |
+| Ejecución `./server <PORT> <LogFile>` | ✅ |
+| Makefile y compilación con `gcc` (sin warnings) | ✅ |
+| README con Introducción, Desarrollo, Conclusiones, Referencias | ✅ |
+| Documentación del protocolo con UML | ✅ |
+| Repositorio en GitHub con commits incrementales e historias de usuario | ✅ |
+| Despliegue en AWS Academy | 📄 guía lista en `docs/DESPLIEGUE_AWS.md` |
 
 ## 4. Referencias
 
