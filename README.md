@@ -35,8 +35,6 @@ Este proyecto implementa el clásico juego **Pong** en una arquitectura
 
 ## 2. Desarrollo
 
-> Esta sección se irá completando fase por fase a medida que avanza el proyecto.
-
 ### 2.1 Arquitectura general
 
 Ver [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). En resumen: el servidor en C
@@ -176,15 +174,60 @@ make -C server
 python3 tests/stress_protocol.py
 ```
 
-Queda por implementar en el servidor lo que esa misma prueba marca como
-pendiente: tipo desconocido, nickname repetido, ping/pong, cupo de clientes
-y el aviso al rival cuando alguien se desconecta en una partida 1 contra 1.
+El servidor implementa todo el contrato de robustez: número mágico/versión/
+longitud inválidos, registro mal formado, **tipo desconocido** (`ERR_UNKNOWN_TYPE`),
+**nickname repetido** (`ERR_NICK_TAKEN`), **keepalive** `MSG_PING`/`MSG_PONG`,
+**cupo máximo** de clientes (`ERR_SERVER_FULL`, 64), **timeout de lectura**
+(`SO_RCVTIMEO`) para que un cliente callado no cuelgue su hilo, y el **aviso al
+rival** (`MSG_GAME_OVER`) cuando un jugador se desconecta en una partida 1vs1.
+El servidor nunca se cae: `send` usa `MSG_NOSIGNAL` para que un socket cerrado
+no mate el proceso.
 
-### 2.7 Despliegue en AWS Academy
-*(Pendiente)*
+### 2.7 Emparejamiento (matchmaking) 1vs1
+
+Implementado en `server/src/match.c`. Cuando un jugador envía `MSG_QUEUE`, queda
+en una **cola de espera** (protegida con mutex). Al llegar un segundo jugador, el
+servidor forma una **partida compartida**: ambos reciben `MSG_MATCH_FOUND` (con el
+lado asignado y el nick del rival) y luego `MSG_GAME_START`. Los dos jugadores
+comparten un mismo `GameState`; el hilo del jugador izquierdo (host) simula la
+física y difunde `MSG_STATE` a ambos, mientras el otro solo aplica su input. La
+memoria de la partida se libera con un **conteo de referencias** para evitar que
+un hilo use datos que el otro ya liberó. Varias parejas juegan simultáneamente.
+
+### 2.8 Despliegue en AWS Academy
+
+La guía paso a paso está en [`docs/DESPLIEGUE_AWS.md`](docs/DESPLIEGUE_AWS.md):
+crear la instancia EC2, abrir el puerto del servidor en el *security group*,
+compilar con `gcc` en la nube y ejecutar `./server <PORT> <LogFile>`. Los
+clientes se conectan a la **IP pública** de la instancia usando el mismo
+protocolo binario que en local.
+
+### 2.9 Documentación UML
+
+- **Diagrama de secuencia** del protocolo: [`docs/SECUENCIA.md`](docs/SECUENCIA.md)
+  (orden de los mensajes: registro → emparejamiento → juego → fin).
+- **Diagrama de estados** del cliente: [`docs/ESTADOS.md`](docs/ESTADOS.md)
+  (los estados de la aplicación y qué mensaje provoca cada transición).
 
 ## 3. Conclusiones
-*(Pendiente — se completa al final del proyecto)*
+
+- Se logró implementar un juego Pong multijugador completo sobre una
+  arquitectura **cliente/servidor** con **TCP/IP** y la **API de Sockets
+  Berkeley**, cumpliendo que el servidor sea la única fuente de verdad y que
+  **todo pase por el servidor**.
+- El diseño de un **protocolo binario propio** con header de tamaño fijo y
+  *framing length-prefixed* resolvió el reto de delimitar mensajes sobre el
+  flujo continuo de TCP, y permitió que un servidor en C y un cliente en Python
+  se entiendan byte a byte.
+- El uso de **hilos (pthreads)** con datos compartidos protegidos por **mutex**
+  permitió atender múltiples parejas de forma concurrente sin condiciones de
+  carrera.
+- El trabajo de **robustez** (validación estricta, timeouts, keepalive, manejo
+  de desconexiones) hace que el servidor resista entradas malformadas y clientes
+  que se caen sin interrumpir el servicio a los demás.
+- El proyecto reforzó conceptos clave de redes: orden de bytes de red, la
+  diferencia entre un *stream* (TCP) y un protocolo de mensajes, y la separación
+  de responsabilidades entre presentación (cliente) y lógica (servidor).
 
 ## 4. Referencias
 
