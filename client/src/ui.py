@@ -111,6 +111,35 @@ def draw_game(screen, state, font, rival=None, small_font=None):
     screen.blit(score_text, rect)
 
 
+def draw_game_over(screen, font, small_font, result, my_side):
+    """
+    Pantalla de MSG_GAME_OVER.
+    result trae winner_side, score_left y score_right (los tres bytes del
+    servidor). my_side es el lado de este cliente, para decir si gano o perdio.
+    Si no conocemos el lado, se dice quien gano por izquierda o derecha.
+    """
+    screen.fill(BLACK)
+    winner = result["winner_side"]
+    if my_side is not None and winner == my_side:
+        title, color = "Ganaste", GREEN
+    elif my_side is not None:
+        title, color = "Perdiste", RED
+    elif winner == p.SIDE_LEFT:
+        title, color = "Gana la izquierda", WHITE
+    else:
+        title, color = "Gana la derecha", WHITE
+
+    title_surf = font.render(title, True, color)
+    screen.blit(title_surf, title_surf.get_rect(center=(WINDOW_WIDTH // 2, 220)))
+
+    score = font.render(
+        f'{result["score_left"]}  -  {result["score_right"]}', True, WHITE)
+    screen.blit(score, score.get_rect(center=(WINDOW_WIDTH // 2, 300)))
+
+    hint = small_font.render("Cierra la ventana para salir.", True, GRAY)
+    screen.blit(hint, hint.get_rect(center=(WINDOW_WIDTH // 2, 380)))
+
+
 def draw_message(screen, font, lines, color=WHITE):
     """Dibuja una o varias lineas de texto centradas (para pantallas de aviso)."""
     screen.fill(BLACK)

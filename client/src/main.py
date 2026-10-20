@@ -53,6 +53,7 @@ def main():
         "rival": None,           # nickname del rival (MSG_MATCH_FOUND)
         "side": None,            # SIDE_LEFT o SIDE_RIGHT
         "match_id": None,
+        "game_over": None,       # dict de parse_game_over, si la partida termino
     }
 
     net = network.PongClientNet(host, port)
@@ -109,7 +110,11 @@ def main():
                 ui.draw_message(screen, small_font, ["Iniciando partida..."])
 
         elif s == "GAMEOVER":
-            ui.draw_message(screen, font, ["FIN DE LA PARTIDA"])
+            if app["game_over"]:
+                ui.draw_game_over(screen, font, small_font,
+                                  app["game_over"], app["side"])
+            else:
+                ui.draw_message(screen, font, ["FIN DE LA PARTIDA"])
 
         elif s == "ERROR":
             ui.draw_message(screen, small_font,
@@ -230,12 +235,10 @@ def _poll_matchmaking(app, net):
                 app["state"] = "PLAYING"
                 return
             elif msg_type in (p.MSG_ERROR, p.MSG_REGISTER_ERR):
-                code = network.parse_error(payload)
-                app["error_msg"] = p.ERROR_MESSAGES.get(code, f"Error {code}")
-                app["state"] = "ERROR"
+                _show_server_error(app, payload)
                 return
             elif msg_type == p.MSG_GAME_OVER:
-                app["state"] = "GAMEOVER"
+                _finish_game(app, payload)
                 return
     except network.ConnectionClosed:
         app["error_msg"] = "El servidor cerro la conexion"
@@ -243,6 +246,23 @@ def _poll_matchmaking(app, net):
     except (OSError, ValueError) as e:
         app["error_msg"] = f"Error de emparejamiento: {e}"
         app["state"] = "ERROR"
+
+
+def _finish_game(app, payload):
+    """Guarda ganador y marcador de MSG_GAME_OVER y pasa a la pantalla final."""
+    try:
+        app["game_over"] = network.parse_game_over(payload)
+        app["state"] = "GAMEOVER"
+    except ValueError as e:
+        app["error_msg"] = f"Fin de partida ilegible: {e}"
+        app["state"] = "ERROR"
+
+
+def _show_server_error(app, payload):
+    """Muestra el texto de un MSG_ERROR y sale de la partida."""
+    code = network.parse_error(payload)
+    app["error_msg"] = p.ERROR_MESSAGES.get(code, f"Error {code}")
+    app["state"] = "ERROR"
 
 
 def _play_step(app, net):
@@ -277,10 +297,16 @@ def _play_step(app, net):
             if msg_type == p.MSG_STATE:
                 app["game_state"] = network.parse_state(payload)
             elif msg_type == p.MSG_GAME_OVER:
-                app["state"] = "GAMEOVER"
+                _finish_game(app, payload)
+                return
+            elif msg_type in (p.MSG_ERROR, p.MSG_REGISTER_ERR):
+                _show_server_error(app, payload)
                 return
     except network.ConnectionClosed:
         app["error_msg"] = "El servidor cerro la conexion"
+        app["state"] = "ERROR"
+    except (OSError, ValueError) as e:
+        app["error_msg"] = f"Error durante la partida: {e}"
         app["state"] = "ERROR"
 
 
