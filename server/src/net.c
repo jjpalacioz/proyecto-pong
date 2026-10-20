@@ -23,7 +23,10 @@ int recv_all(int fd, void *buf, size_t len) {
         if (n < 0) {
             /* EINTR = la llamada fue interrumpida por una senal; reintentamos. */
             if (errno == EINTR) continue;
-            return -1;  /* error real de lectura */
+            /* Si todavia no leimos nada, el que llama puede volver a intentar
+             * (por ejemplo un timeout con el jugador quieto en la pantalla).
+             * Si ya consumimos bytes, el mensaje quedo a medias: hay que cerrar. */
+            return (total == 0) ? -1 : -2;
         }
         if (n == 0) {
             /* recv devuelve 0 = el otro extremo cerro la conexion. */

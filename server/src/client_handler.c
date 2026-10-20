@@ -172,7 +172,7 @@ void *client_thread(void *arg) {
         if (res == MSG_CLOSED) {
             log_msg(LOG_INFO, "[fd=%d] Cliente desconectado antes de registrarse", client_fd);
             break;
-        } else if (res == MSG_ERR_IO) {
+        } else if (res == MSG_ERR_TIMEOUT || res == MSG_ERR_IO) {
             log_msg(LOG_ERROR, "[fd=%d] Error de E/S: %s", client_fd, strerror(errno));
             break;
         } else if (res == MSG_ERR_MAGIC) {
@@ -225,9 +225,23 @@ void *client_thread(void *arg) {
          * ping (MSG_PING) o desconectar. Manejamos cada caso y validamos la
          * forma de los mensajes antes que el estado (P05, P06). */
         int keep = 1;
+        int idle_strikes = 0;  /* timeouts seguidos sin ningun byte (pantalla de ENTER) */
         while (keep) {
             Message msg;
             RecvResult res = recv_message(client_fd, &msg);
+
+            if (res == MSG_ERR_TIMEOUT) {
+                /* El jugador ya esta registrado y puede tardar en pulsar ENTER.
+                 * Un timeout sin haber leido bytes no es un ataque de LENGTH:
+                 * ese caso consume el header y vuelve como MSG_ERR_IO. Aqui solo
+                 * se agoto la espera entre mensajes. A los ~2 min se libera el nick. */
+                if (++idle_strikes >= 8) {
+                    log_msg(LOG_INFO, "[fd=%d] Inactivo tras el registro, se cierra", client_fd);
+                    break;
+                }
+                continue;
+            }
+            idle_strikes = 0;
 
             if (res == MSG_CLOSED) {
                 log_msg(LOG_INFO, "[fd=%d] Cliente desconectado tras registrarse", client_fd);

@@ -30,7 +30,8 @@ typedef enum {
     MSG_ERR_IO      = -1,  /* error de lectura del socket */
     MSG_ERR_MAGIC   = -2,  /* el numero magico no coincide */
     MSG_ERR_VERSION = -3,  /* version de protocolo no soportada */
-    MSG_ERR_LENGTH  = -4   /* longitud del payload fuera de rango */
+    MSG_ERR_LENGTH  = -4,  /* longitud del payload fuera de rango */
+    MSG_ERR_TIMEOUT = -5   /* no llego ningun byte (se puede volver a intentar) */
 } RecvResult;
 
 /* Lee un mensaje completo desde el socket 'fd' y lo guarda en 'msg'.

@@ -8,6 +8,8 @@
 #include <unistd.h>     /* usleep */
 #include <fcntl.h>      /* fcntl -> socket no bloqueante */
 #include <errno.h>
+#include <poll.h>       /* poll -> ver si el que espera cerro la ventana */
+#include <sys/socket.h> /* recv, MSG_PEEK */
 #include <arpa/inet.h>  /* htons, htonl */
 
 #include "logger.h"
@@ -157,6 +159,31 @@ static void set_nonblocking(int fd) {
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
+/* Saca esta partida de la sala de espera si TODAVIA es la que esta en cola.
+ * Devuelve 1 si este hilo la cancelo (el rival no llego, o el que esperaba
+ * se fue). Devuelve 0 si el rival alcanzo a entrar: en ese caso no hay que
+ * tocar la cola ni marcar la partida como muerta.
+ * Tambien deja refs en 1, porque el otro hilo nunca va a llamar match_release. */
+static int cancel_waiting(Match *m) {
+    int cancelled = 0;
+
+    pthread_mutex_lock(&queue_mutex);
+    if (pending_match == m) {
+        waiting_fd = -1;
+        pending_match = NULL;
+        m->active = 0;
+        cancelled = 1;
+    }
+    pthread_mutex_unlock(&queue_mutex);
+
+    if (cancelled) {
+        pthread_mutex_lock(&m->lock);
+        m->refs = 1;
+        pthread_mutex_unlock(&m->lock);
+    }
+    return cancelled;
+}
+
 /* --------------------------------------------------------------------------
  *  match_run: ejecuta la partida para el hilo de este jugador.
  * -------------------------------------------------------------------------- */
@@ -169,16 +196,40 @@ void match_run(Match *m, int side) {
          * no hay rival (fd invalido) y la partida terminaria al instante. */
         int waited_ms = 0;
         while (m->active && !m->ready) {
-            usleep(10000);          /* 10 ms */
+            struct pollfd pfd;
+            pfd.fd = my_fd;
+            pfd.events = POLLIN;
+            int pr = poll(&pfd, 1, 10);   /* 10 ms */
             waited_ms += 10;
+
+            if (pr > 0) {
+                /* MSG_PEEK no se come los bytes: solo pregunta si el socket
+                 * sigue vivo. Si el jugador cerro la ventana, hay que soltar
+                 * la cola; si no, el siguiente queda pegado a esta partida. */
+                char peek;
+                ssize_t n = recv(my_fd, &peek, 1, MSG_PEEK | MSG_DONTWAIT);
+                if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+                    if (cancel_waiting(m)) {
+                        log_msg(LOG_INFO, "Match %u: el que esperaba cerro la ventana",
+                                m->match_id);
+                        return;
+                    }
+                    break;  /* el rival ya entro; el bucle de juego ve el cierre */
+                }
+                if (n > 0) usleep(10000);  /* hay datos, pero todavia no es el rival */
+            }
+
             if (waited_ms > 120000) {  /* 2 minutos sin rival: abandonar */
-                log_msg(LOG_INFO, "Match %u: nadie llego, se cancela", m->match_id);
-                m->active = 0;
-                return;
+                if (cancel_waiting(m)) {
+                    log_msg(LOG_INFO, "Match %u: nadie llego, se cancela", m->match_id);
+                    send_error(my_fd, ERR_NO_RIVAL);
+                    return;
+                }
             }
         }
 
         /* Ya hay rival: avisar el inicio de la partida y pasar a no bloqueante. */
+        if (!m->active) return;
         send_message(my_fd, MSG_GAME_START, NULL, 0);
         set_nonblocking(my_fd);
 

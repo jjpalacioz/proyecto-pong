@@ -20,7 +20,8 @@
  * Devuelve:
  *    1  -> se leyeron los 'len' bytes completos (exito)
  *    0  -> el cliente cerro la conexion antes de completar (desconexion)
- *   -1  -> error de lectura */
+ *   -1  -> error de lectura sin haber consumido ningun byte (se puede reintentar)
+ *   -2  -> error despues de consumir parte de los bytes (el flujo quedo cortado) */
 int recv_all(int fd, void *buf, size_t len);
 
 /* Envia EXACTAMENTE 'len' bytes desde 'buf' por el socket 'fd'.

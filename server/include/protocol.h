@@ -86,6 +86,7 @@
 #define ERR_INVALID_FIELD   0x06  /* un campo del payload es invalido */
 #define ERR_NOT_REGISTERED  0x07  /* el cliente intenta jugar sin registrarse */
 #define ERR_SERVER_FULL     0x08  /* el servidor no acepta mas clientes */
+#define ERR_NO_RIVAL        0x09  /* se agoto la espera y nadie se unio a la partida */
 
 /* ----------------------------------------------------------------------------
  *  Parametros del juego (definidos por el servidor, unica fuente de verdad)

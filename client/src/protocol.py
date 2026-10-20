@@ -72,6 +72,7 @@ ERR_NICK_TAKEN     = 0x05
 ERR_INVALID_FIELD  = 0x06
 ERR_NOT_REGISTERED = 0x07
 ERR_SERVER_FULL    = 0x08
+ERR_NO_RIVAL       = 0x09
 
 # Diccionario para traducir un codigo de error a un texto legible (para la GUI).
 ERROR_MESSAGES = {
@@ -83,6 +84,7 @@ ERROR_MESSAGES = {
     ERR_INVALID_FIELD:  "Campo invalido (revisa nickname/email)",
     ERR_NOT_REGISTERED: "Debes registrarte primero",
     ERR_SERVER_FULL:    "El servidor esta lleno",
+    ERR_NO_RIVAL:       "Nadie se conecto a tiempo. Cierra y busca rival otra vez.",
 }
 
 # ----------------------------------------------------------------------------

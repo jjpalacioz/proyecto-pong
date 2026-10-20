@@ -14,6 +14,7 @@
 #include "net.h"
 
 #include <string.h>      /* memcpy */
+#include <errno.h>       /* errno, EAGAIN, ETIMEDOUT */
 #include <arpa/inet.h>   /* htons, ntohs -> conversion de orden de bytes */
 
 /* --------------------------------------------------------------------------
@@ -25,7 +26,13 @@ RecvResult recv_message(int fd, Message *msg) {
     /* --- 1. Leer EXACTAMENTE los 6 bytes del header --- */
     int r = recv_all(fd, header, HEADER_SIZE);
     if (r == 0) return MSG_CLOSED;   /* el cliente cerro */
-    if (r < 0) return MSG_ERR_IO;    /* error de lectura */
+    if (r < 0) {
+        /* -1 = no se leyo ningun byte (timeout o no bloqueante sin datos).
+         * -2 = se leyo una parte del header y luego fallo: el flujo quedo roto. */
+        if (r == -1 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == ETIMEDOUT))
+            return MSG_ERR_TIMEOUT;
+        return MSG_ERR_IO;
+    }
 
     /* --- 2. Desempaquetar los campos del header ---
      * Los 2 bytes de MAGIC y LENGTH vienen en big-endian (orden de red).
