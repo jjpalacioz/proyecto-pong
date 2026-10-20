@@ -1,57 +1,73 @@
-# Cliente Pong (Python + Pygame)
+# Cómo jugar — cliente Pong
 
-Cliente del juego Pong. Se conecta al servidor por TCP, se registra con el
-protocolo binario `MyAppGameProtocol` y muestra el juego con una interfaz
-gráfica hecha con **Pygame**.
+El cliente es la ventana del juego. Se conecta al servidor por TCP, te registra
+y dibuja la partida. No calcula la pelota ni el marcador: eso lo hace el servidor.
 
-## Estructura
+Hacen falta **dos ventanas** (dos jugadores) apuntando al mismo servidor para
+una partida 1 contra 1. Con una sola, la ventana se queda en "Buscando rival...".
 
-```
-client/
-├── requirements.txt      # dependencias (pygame)
-└── src/
-    ├── protocol.py       # constantes del protocolo (coinciden con el servidor C)
-    ├── network.py        # conexión TCP + envío/recepción de mensajes binarios
-    ├── ui.py             # funciones de dibujo con Pygame
-    └── main.py           # programa principal (registro + ventana del juego)
-```
-
-**Separación de capas (buen diseño):** `network.py`/`protocol.py` NO dependen de
-Pygame (solo red); `ui.py`/`main.py` se encargan de la parte gráfica. Así la
-lógica de red se puede probar sin interfaz.
-
-## Requisitos
+## Qué necesitas
 
 - Python 3.8 o superior
-- Pygame (se instala con requirements.txt)
+- El servidor ya corriendo (`./server <PUERTO> <archivo.log>` desde `server/`)
 
-## Instalación
+## Instalar
 
-```bash
+En PowerShell, desde la carpeta del proyecto:
+
+```powershell
 cd client
 pip install -r requirements.txt
 ```
 
-## Ejecución
+## Abrir la ventana
 
-```bash
-cd client
+```powershell
 python src/main.py <IP_SERVIDOR> <PUERTO>
-# Ejemplo (servidor en la misma máquina):
+```
+
+Si el servidor está en esta misma máquina:
+
+```powershell
 python src/main.py 127.0.0.1 5000
 ```
 
-Al iniciar se abre una ventana con la **pantalla de registro**:
-- Escribe tu **nickname**, presiona **TAB** y escribe tu **email**.
-- Presiona **ENTER** para registrarte contra el servidor.
-- Si el registro es correcto, pasas a la pantalla de espera.
+El servidor en C se arranca en WSL. La ventana se abre en Windows y se conecta
+a `127.0.0.1` y al puerto que hayas puesto al lanzar `./server`.
 
-> Controles del juego (activos desde la Fase 6): **flecha arriba / flecha abajo**
-> para mover la paleta.
+## Cómo entrar a la partida
 
-## Estado actual (Fase 5)
+1. Escribe un nickname.
+2. Pulsa **TAB** y escribe un email.
+3. Pulsa **ENTER** para registrarte.
+4. Cuando diga que ya estás registrado, pulsa **ENTER** otra vez.
+5. La ventana muestra **Buscando rival...** hasta que otra persona hace lo mismo.
+6. Al encontrar rival verás su nickname y si juegas a la izquierda o a la derecha.
+7. La partida empieza sola.
 
-- ✅ Conexión TCP al servidor.
-- ✅ Registro (nickname + email) con el protocolo binario.
-- ✅ Ventana base de Pygame (campo, paletas, pelota, marcador).
-- ⏳ Movimiento y estado del juego en tiempo real: se implementa en la Fase 6.
+Cada jugador debe usar un nickname distinto. Si el segundo repite el primero,
+el servidor lo rechaza.
+
+## Controles
+
+| Tecla | Qué hace |
+|-------|----------|
+| TAB | Cambia entre nickname y email |
+| ENTER | Registrarse, y luego buscar rival |
+| Flecha arriba | Sube tu paleta |
+| Flecha abajo | Baja tu paleta |
+
+La paleta izquierda es del primer jugador que entró a la cola. La derecha es
+del segundo. Durante la partida, arriba a la izquierda dice contra quién juegas
+y en el centro está el marcador.
+
+## Cuando termina
+
+La ventana deja de mostrar el campo y dice **Ganaste** o **Perdiste**, con el
+marcador final (`izquierda - derecha`). Gana quien llega primero a 5 puntos.
+Si el rival cierra su ventana a mitad, el servidor te da la victoria y ves
+esa misma pantalla.
+
+Si se cae la conexión o el servidor manda un error (nickname ocupado, servidor
+lleno, mensaje inválido), la ventana muestra el texto en rojo en lugar de
+quedarse congelada. Para salir, cierra la ventana.
