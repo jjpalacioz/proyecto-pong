@@ -215,7 +215,14 @@ compilar con `gcc` en la nube y ejecutar `./server <PORT> <LogFile>`. Los
 clientes se conectan a la **IP pública** de la instancia usando el mismo
 protocolo binario que en local.
 
-### 2.9 Documentación UML
+### 2.9 Guía para jugar en red
+
+La guía paso a paso para conectarse y jugar con el servidor en AWS desde
+**macOS, Windows o Linux** está en [`docs/COMO_JUGAR.md`](docs/COMO_JUGAR.md).
+El manual detallado de la interfaz del cliente está en
+[`client/README.md`](client/README.md).
+
+### 2.10 Documentación UML
 
 - **Diagrama de secuencia** del protocolo: [`docs/SECUENCIA.md`](docs/SECUENCIA.md)
   (orden de los mensajes: registro → emparejamiento → juego → fin).
