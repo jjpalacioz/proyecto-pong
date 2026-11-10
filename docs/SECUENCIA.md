@@ -1,7 +1,7 @@
 # Diagrama de secuencia — MyAppGameProtocol
 
 **Fase 9 · UML**
-**Autor:** Alejandro Correa
+**Autor:** Equipo PongServer
 
 Este diagrama muestra el orden de los mensajes de una partida 1 contra 1.
 El servidor es el único que habla con los dos clientes: ningún cliente le
