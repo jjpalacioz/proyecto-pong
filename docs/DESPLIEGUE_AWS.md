@@ -1,7 +1,7 @@
 # Guía de despliegue en AWS Academy — PongServer
 
 **Fase 9 · Infraestructura**
-**Responsable:** Juan José Palacio
+**Responsable:** Equipo PongServer
 
 Esta guía explica cómo poner el servidor de Pong a correr en una instancia
 EC2 de AWS Academy, para que los clientes se conecten por Internet (no solo

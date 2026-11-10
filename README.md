@@ -6,11 +6,11 @@
 
 ## 👥 Integrantes
 
-| Nombre | Rol principal |
-|--------|---------------|
-| Juan José Palacio | Líder técnico · Servidor C (núcleo, concurrencia, lógica del juego) |
-| Alejandro Correa | Protocolo binario · Serialización · Robustez · UML |
-| Samuel Granados | Cliente Python/Pygame · GUI · Score en tiempo real · Logger |
+| Integrante | Rol principal |
+|------------|---------------|
+| Integrante 1 | Líder técnico · Servidor C (núcleo, concurrencia, lógica del juego) |
+| Integrante 2 | Protocolo binario · Serialización · Robustez · UML |
+| Integrante 3 | Cliente Python/Pygame · GUI · Score en tiempo real · Logger |
 
 ---
 

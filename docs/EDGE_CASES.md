@@ -1,7 +1,7 @@
 # Casos límite — MyAppGameProtocol
 
 **Fase 8 · Robustez**
-**Autor del diseño:** Alejandro Correa
+**Autor del diseño:** Equipo PongServer
 
 Este documento es el contrato de los peores casos: lo que el profesor puede
 mandar al socket para intentar tumbar el servidor. Para cada caso dice qué

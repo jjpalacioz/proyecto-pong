@@ -14,7 +14,7 @@ de la interfaz del cliente, ver [`client/README.md`](../client/README.md).
 
 - **Python 3.11 o 3.12** (recomendado; con 3.13+ pygame puede fallar al instalar).
 - El **servidor corriendo** (en AWS o en una máquina accesible).
-- La **IP y el puerto** del servidor. Ejemplo de esta guía: `34.229.123.245` y `5000`.
+- La **IP y el puerto** del servidor. En esta guía se usa `<IP_PUBLICA>` y `5000`.
 
 > ⚠️ La IP pública de AWS **puede cambiar cada vez que se reinicia el Lab**.
 > Verifica la IP actual en EC2 → Instances → "Public IPv4 address" antes de jugar.
@@ -54,7 +54,7 @@ cd proyecto-pong/client
 python3.12 -m venv venv
 source venv/bin/activate
 pip install pygame
-python src/main.py 34.229.123.245 5000
+python src/main.py <IP_PUBLICA> 5000
 ```
 
 ### 🪟 Windows (PowerShell o CMD)
@@ -67,7 +67,7 @@ cd proyecto-pong\client
 python -m venv venv
 venv\Scripts\activate
 pip install pygame
-python src\main.py 34.229.123.245 5000
+python src\main.py <IP_PUBLICA> 5000
 ```
 
 ### 🐧 Linux (Ubuntu/Debian)
@@ -79,7 +79,7 @@ cd proyecto-pong/client
 python3 -m venv venv
 source venv/bin/activate
 pip install pygame
-python src/main.py 34.229.123.245 5000
+python src/main.py <IP_PUBLICA> 5000
 ```
 
 ### Diferencias entre sistemas
